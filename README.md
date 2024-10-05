@@ -1,1 +1,1 @@
-# Expense-Tracker-backend-only-
+# Expense Tracker backend only
