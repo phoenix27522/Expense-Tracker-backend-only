@@ -1,12 +1,17 @@
+import bcrypt
 from werkzeug.security import check_password_hash
-from flask import current_app as app  # Ensure you're in the app context
+from flask import current_app as app
 
 def verify_user_credentials(email, password):
-    from app.models import User  # Import inside the function to avoid circular imports
+    from app.models import User  # Importing inside the function to avoid circular imports
+    
     user = User.query.filter_by(email=email).first()
-    if user and check_password_hash(user.password_hash, password):
-        return user
-    return None
+
+    # If the user is found, check the password
+    if user and bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+        return user  # Returns the user object if credentials are valid
+
+    return None  # Returns None if the credentials are invalid
 
 def create_notification(user_id, message, notif_type):
     from app.models import Notification, db  # Import inside the function to avoid circular imports

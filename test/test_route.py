@@ -1,8 +1,8 @@
 import unittest
-import json
 from app.config import TestingConfig
 from app import create_app, db
 from app.models import User
+import bcrypt  # Import bcrypt for password hashing
 
 class TestUserRegistration(unittest.TestCase):
     def setUp(self):
@@ -10,7 +10,7 @@ class TestUserRegistration(unittest.TestCase):
         self.app.config.from_object(TestingConfig)
         self.client = self.app.test_client()
 
-        # Sets up the database for testing
+        # Set up the database for testing
         with self.app.app_context():
             db.create_all()  # Create the database tables
             User.query.delete()  # Clear any existing users
@@ -26,7 +26,7 @@ class TestUserRegistration(unittest.TestCase):
             "email": "testuser@example.com",
             "password": "validPassword123"
         })
-        print(response.get_json())  # changing get_json() instead of json() to aviod conflict
+        print("Test valid registration:", response.get_json())
         self.assertEqual(response.status_code, 201)
         self.assertIn('message', response.get_json())
         self.assertEqual(response.get_json()['message'], 'User registered successfully')
@@ -45,7 +45,7 @@ class TestUserRegistration(unittest.TestCase):
             "email": "testuser@example.com",
             "password": "validPassword123"
         })
-        print(response.get_json())  # changing get_json() instead of json() to aviod conflict
+        print("Test duplicate registration:", response.get_json())
         self.assertEqual(response.status_code, 400)
         self.assertIn('message', response.get_json())
         self.assertEqual(response.get_json()['message'], 'User already exists')
@@ -56,7 +56,7 @@ class TestUserRegistration(unittest.TestCase):
             "email": "invalid-email-format",
             "password": "validPassword123"
         })
-        print(response.get_json())  #  changing get_json() instead of json() to aviod conflict
+        print("Test invalid email format:", response.get_json())
         self.assertEqual(response.status_code, 400)
         self.assertIn('message', response.get_json())
         self.assertEqual(response.get_json()['message'], 'Invalid email format')
@@ -67,10 +67,84 @@ class TestUserRegistration(unittest.TestCase):
             "email": "testuser@example.com",
             "password": "short"
         })
-        print(response.get_json())  # changing get_json() instead of json() to aviod conflict
+        print("Test short password:", response.get_json())
         self.assertEqual(response.status_code, 400)
         self.assertIn('message', response.get_json())
         self.assertEqual(response.get_json()['message'], 'Password too short, must be at least 6 characters')
+
+
+class TestUserLogin(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object(TestingConfig)
+        self.client = self.app.test_client()
+
+        # Set up the database
+        with self.app.app_context():
+            db.create_all()  # Create the database tables
+
+            # Create a test user with the correct password hash
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            test_user = User(
+                user_name='testuser',
+                email='testuser@example.com',
+                password_hash=password_hash  # Use the generated hash
+            )
+            db.session.add(test_user)
+            db.session.commit()
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()  # Remove the current session
+            db.drop_all()  # Drop all tables
+
+    def test_valid_login(self):
+        response = self.client.post('/login', json={
+            'email': 'testuser@example.com',
+            'password': 'validPassword123'
+        })
+        print("Test valid login:", response.get_json())
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('access_token', response.get_json())
+
+    def test_invalid_email(self):
+        response = self.client.post('/login', json={
+            'email': 'invaliduser@example.com',
+            'password': 'validPassword123'
+        })
+        print("Test invalid email:", response.get_json())
+        self.assertEqual(response.status_code, 401)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'Invalid credentials')
+
+    def test_invalid_password(self):
+        response = self.client.post('/login', json={
+            'email': 'testuser@example.com',
+            'password': 'wrongPassword'
+        })
+        print("Test invalid password:", response.get_json())
+        self.assertEqual(response.status_code, 401)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'Invalid credentials')
+
+    def test_missing_email(self):
+        response = self.client.post('/login', json={
+            'password': 'validPassword123'
+        })
+        print("Test missing email:", response.get_json())
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'Missing required fields')
+
+    def test_missing_password(self):
+        response = self.client.post('/login', json={
+            'email': 'testuser@example.com'
+        })
+        print("Test missing password:", response.get_json())
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'Missing required fields')
+
 
 if __name__ == '__main__':
     unittest.main()

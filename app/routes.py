@@ -57,3 +57,26 @@ def register():
     db.session.commit()
 
     return jsonify({'message': 'User registered successfully'}), 201
+
+# login route
+@main.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+
+    # Validate input data
+    if not data or not data.get('email') or not data.get('password'):
+        return jsonify({'message': 'Missing required fields'}), 400
+
+    email = data['email']
+    password = data['password']
+
+    # Verify user credentials
+    user = verify_user_credentials(email, password)
+    if user is None:
+        return jsonify({'message': 'Invalid credentials'}), 401
+
+    # Create access token
+    access_token = create_access_token(identity=user.id)
+
+    # Return the access token
+    return jsonify({'access_token': access_token}), 200
