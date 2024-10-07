@@ -21,8 +21,8 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     migrate.init_app(app, db)
 
-    #from app.routes import main as main_blueprint
-    #app.register_blueprint(main_blueprint)
+    from app.routes import main as main_blueprint
+    app.register_blueprint(main_blueprint)
    
     from app.utils import create_recurring_expenses  # Now safe to import
 
