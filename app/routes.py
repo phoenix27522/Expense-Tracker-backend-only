@@ -93,3 +93,10 @@ def logout():
     
     # Return a success message indicating logout
     return jsonify({'message': 'Successfully logged out'}), 200
+
+@main.route('/protected', methods=['GET'])
+@jwt_required()  # Ensures that only users with a valid JWT can access this route
+def protected():
+    current_user = get_jwt_identity()  # Retrieves the identity of the logged-in user from the JWT
+    return jsonify({'message': f'Welcome, user {current_user}'}), 200
+
