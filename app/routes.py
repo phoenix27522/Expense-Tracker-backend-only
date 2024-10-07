@@ -80,3 +80,16 @@ def login():
 
     # Return the access token
     return jsonify({'access_token': access_token}), 200
+
+# logout route 
+@main.route('/logout', methods=['POST'])
+@jwt_required()  # Ensure the user is authenticated via JWT
+def logout():
+    # Extract the JWT token's unique identifier (JTI)
+    jti = get_jwt()['jti']
+    
+    # Add the JTI to the blacklist to invalidate the token
+    blacklist.add(jti)
+    
+    # Return a success message indicating logout
+    return jsonify({'message': 'Successfully logged out'}), 200

@@ -4,6 +4,7 @@ from app import create_app, db
 from app.models import User
 import bcrypt  # Import bcrypt for password hashing
 
+# test case for user registration
 class TestUserRegistration(unittest.TestCase):
     def setUp(self):
         self.app = create_app()
@@ -72,7 +73,7 @@ class TestUserRegistration(unittest.TestCase):
         self.assertIn('message', response.get_json())
         self.assertEqual(response.get_json()['message'], 'Password too short, must be at least 6 characters')
 
-
+# test case for login
 class TestUserLogin(unittest.TestCase):
     def setUp(self):
         self.app = create_app()
@@ -144,7 +145,46 @@ class TestUserLogin(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('message', response.get_json())
         self.assertEqual(response.get_json()['message'], 'Missing required fields')
+# test case for logout
+class TestUserLogout(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object(TestingConfig)
+        self.client = self.app.test_client()
 
+        # Set up the database and create a user
+        with self.app.app_context():
+            db.create_all()
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            test_user = User(
+                user_name='testuser',
+                email='testuser@example.com',
+                password_hash=password_hash
+            )
+            db.session.add(test_user)
+            db.session.commit()
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_logout(self):
+        # Login first to get the access token
+        login_response = self.client.post('/login', json={
+            'email': 'testuser@example.com',
+            'password': 'validPassword123'
+        })
+        access_token = login_response.get_json()['access_token']
+        
+        # Logout using the access token
+        response = self.client.post('/logout', headers={
+            'Authorization': f'Bearer {access_token}'
+        })
+        print("Test logout:", response.get_json())
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'Successfully logged out')
 
 if __name__ == '__main__':
     unittest.main()
