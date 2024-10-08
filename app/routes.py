@@ -6,7 +6,6 @@ from flask import Flask, make_response, render_template, request, url_for, redir
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from app.models import Category, Notification, User, Expenses  # Correct model names
-from app.forms import AddUser
 from datetime import date, datetime
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt, create_access_token
 from app.utils import verify_user_credentials
