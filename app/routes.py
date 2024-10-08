@@ -140,3 +140,100 @@ def adding_new_users():
     except Exception as e:
         # General exception handling if something else goes wrong
         return jsonify({'message': 'An unexpected error occurred'}), 500
+
+# adding expense 
+@main.route('/add_expense', methods=['POST'])
+def adding_new_expenses():
+    data = request.get_json()  # Expect JSON payload in the request body
+
+    if not data or 'user_name' not in data:
+        return jsonify({'message': 'User not specified'}), 400
+
+    # Extracting required fields from the JSON payload
+    user_name = data.get('user_name')
+    amount = data.get('amount')
+    description = data.get('description')
+    date = data.get('date')
+    category_id = data.get('Category')  # Assuming this is passed in the JSON
+
+    # Validate the incoming data (basic validation)
+    if amount is None or description is None or date is None or category_id is None:
+        return jsonify({'message': 'Missing required fields'}), 400
+
+    try:
+        # Convert the date to the appropriate format if needed
+        date_purchase = datetime.strptime(date, '%Y-%m-%dT%H:%M:%S')
+
+        # Create the expense
+        new_expense = Expenses(
+            amount=amount,
+            description=description,
+            date=date_purchase,
+            user_id=User.query.filter_by(user_name=user_name).first().id,
+            category_id=category_id
+        )
+        db.session.add(new_expense)
+        db.session.commit()
+
+        return jsonify({'message': 'Expense added successfully'}), 201
+    except Exception as e:
+        return jsonify({'message': str(e)}), 400
+
+# show expenses
+@main.route('/expenses', methods=['GET'])
+def show_expenses():
+    user_name = request.args.get("user")  # Using query parameters to get the username
+    if user_name is None:
+        return jsonify({'message': 'User not specified'}), 400
+
+    # Query the user's expenses
+    expenses_user = db.session.query(Expenses).join(User).filter(User.user_name == user_name).all()
+    
+    if not expenses_user:
+        return jsonify({'message': f'No expenses found for user {user_name}'}), 404
+
+    # Calculate the total amount of expenses
+    total_amount = sum(expense.amount for expense in expenses_user)
+
+    # Prepare the response
+    expenses_data = [{'id': expense.id, 'amount': expense.amount, 'description': expense.description} for expense in expenses_user]
+
+    return jsonify({
+        'user': user_name,
+        'total': round(total_amount, 2),
+        'expenses': expenses_data
+    }), 200
+
+#modifiying expense
+@main.route('/mod_expense', methods=['POST'])
+def modifying_expenses():
+    data = request.get_json()  # Expect JSON payload in the request body
+
+    name_user = data.get("user")
+    expense_id = data.get("id")
+
+    if name_user is None or expense_id is None:
+        return jsonify({'message': 'User or expense ID not specified'}), 400
+
+    query = db.session.query(Expenses).filter(Expenses.id == expense_id).first()
+    if not query:
+        return jsonify({'message': 'Expense not found'}), 404
+
+    if 'Delete' in data:
+        db.session.delete(query)
+        db.session.commit()
+        return jsonify({'message': 'Expense deleted successfully'}), 200
+
+    # Updating expense details
+    try:
+        query.type_expense = data.get('Type', query.type_expense)
+        query.description_expense = data.get('Description', query.description_expense)
+        query.date_purchase = datetime.strptime(data.get('Date'), "%Y-%m-%dT%H:%M:%S") if data.get('Date') else query.date_purchase
+        query.amount = data.get('Amount', query.amount)
+        query.recurrence = data.get('Recurrence', query.recurrence)
+        query.recurrence_end_date = datetime.strptime(data.get('RecurrenceEndDate'), "%Y-%m-%d") if data.get('RecurrenceEndDate') else query.recurrence_end_date
+        
+        db.session.commit()
+        return jsonify({'message': 'Expense updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'message': str(e)}), 400

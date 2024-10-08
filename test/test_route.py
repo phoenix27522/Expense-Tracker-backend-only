@@ -1,7 +1,8 @@
+from datetime import datetime
 import unittest
 from app.config import TestingConfig
 from app import create_app, db
-from app.models import User
+from app.models import Category, User, Expenses
 import bcrypt  # Import bcrypt for password hashing
 
 # test case for user registration
@@ -305,5 +306,89 @@ class TestAddUser(unittest.TestCase):
         self.assertIn('message', response.get_json())
         self.assertEqual(response.get_json()['message'], 'Missing required fields')
 
-if __name__ == '__main__':
-    unittest.main()
+# testing expense api
+class TestExpensesAPI(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object(TestingConfig)
+        self.client = self.app.test_client()
+
+        # Set up the database
+        with self.app.app_context():
+            db.create_all()
+
+            # Create a test user and category for use in tests
+            self.test_user = User(user_name='testuser', email='testuser@example.com')
+            self.test_category = Category(name='Food')
+
+            db.session.add(self.test_user)
+            db.session.add(self.test_category)
+            db.session.commit()  # Commit the changes to the database
+
+            # Store the category ID for use in tests
+            self.category_id = self.test_category.id
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_add_expense(self):
+        """Test valid POST request for adding a new expense"""
+        response = self.client.post('/add_expense', json={
+            'user_name': 'testuser',  # Ensure this user exists
+            'amount': 100,
+            'description': 'Groceries',
+            'date': '2024-10-08T00:00:00',  # Use an appropriate date format
+            'Category': self.category_id  # Use the stored category ID
+        })
+
+        print("Test add expense response:", response.get_json())  # Print the response for debugging
+        self.assertEqual(response.status_code, 201)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'Expense added successfully')
+
+    def test_show_expenses(self):
+        """Test retrieving expenses for a specific user"""
+        # Add an expense for the user
+        self.client.post('/add_expense', json={
+            'user_name': 'testuser',
+            'amount': 100,
+            'description': 'Test Expense',
+            'date': '2024-10-08T00:00:00',
+            'Category': self.category_id  # Use the stored category ID
+        })
+
+        # Retrieve expenses for the user
+        response = self.client.get('/expenses?user=testuser')
+
+        print("Test show expenses response:", response.get_json())  # Print the response for debugging
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('user', response.get_json())
+        self.assertIn('total', response.get_json())
+        self.assertIn('expenses', response.get_json())
+        self.assertEqual(response.get_json()['user'], 'testuser')
+        self.assertEqual(response.get_json()['total'], 100.0)  # Expect total to be the sum of expenses
+        self.assertEqual(len(response.get_json()['expenses']), 1)  # Check the number of expenses
+
+    def test_show_expenses_no_user(self):
+        """Test retrieving expenses without specifying a user"""
+        response = self.client.get('/expenses')
+        print("Test show expenses no user response:", response.get_json())  # Print the response for debugging
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'User not specified')
+
+    def test_show_expenses_no_expenses(self):
+        """Test retrieving expenses for a user with no expenses"""
+        self.client.post('/add_user', json={
+            'Name': 'testuser2',
+            'Email_address': 'testuser2@example.com'
+        })
+
+        response = self.client.get('/expenses?user=testuser2')
+        print("Test show expenses no expenses response:", response.get_json())  # Print the response for debugging
+        self.assertEqual(response.status_code, 404)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'No expenses found for user testuser2')
+
