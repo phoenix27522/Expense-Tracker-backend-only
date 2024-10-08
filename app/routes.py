@@ -4,8 +4,9 @@ from io import StringIO
 import bcrypt
 from flask import Flask, make_response, render_template, request, url_for, redirect, jsonify, Blueprint
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from app.models import Category, Notification, User, Expenses  # Correct model names
-#from app.forms import AddUser, AddExpense, ModExpense
+from app.forms import AddUser
 from datetime import date, datetime
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt, create_access_token
 from app.utils import verify_user_credentials
@@ -94,9 +95,49 @@ def logout():
     # Return a success message indicating logout
     return jsonify({'message': 'Successfully logged out'}), 200
 
+# protected
 @main.route('/protected', methods=['GET'])
 @jwt_required()  # Ensures that only users with a valid JWT can access this route
 def protected():
     current_user = get_jwt_identity()  # Retrieves the identity of the logged-in user from the JWT
     return jsonify({'message': f'Welcome, user {current_user}'}), 200
 
+# Add user
+@main.route('/add_user', methods=['POST'])
+def adding_new_users():
+    data = request.get_json()
+
+    if not data or not data.get('Name') or not data.get('Email_address'):
+        return jsonify({'message': 'Missing required fields'}), 400
+
+    # Basic email validation
+    email_regex = r'^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w+$'
+    if not re.match(email_regex, data.get('Email_address')):
+        return jsonify({'message': 'Invalid email format'}), 400
+
+    try:
+        # Create a new user with the provided data
+        new_user = User(
+            user_name=data.get("Name"), 
+            email=data.get("Email_address")
+        )
+        db.session.add(new_user)
+        db.session.commit()
+
+        return jsonify({'message': 'User added successfully'}), 201
+
+    except IntegrityError as e:
+        db.session.rollback()  # Rollback the transaction to avoid inconsistent state
+        
+        # Print the original error message for debugging
+        print("IntegrityError:", str(e))
+
+        # Check for unique constraint violations
+        if "UNIQUE constraint failed: user.email" in str(e.orig):
+            return jsonify({'message': 'This email is already in use, please use a different email'}), 400
+        elif "UNIQUE constraint failed: user.user_name" in str(e.orig):
+            return jsonify({'message': 'This name is already in use, please use a different name'}), 400
+
+    except Exception as e:
+        # General exception handling if something else goes wrong
+        return jsonify({'message': 'An unexpected error occurred'}), 500

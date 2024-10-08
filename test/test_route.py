@@ -235,5 +235,75 @@ class TestProtectedRoute(unittest.TestCase):
         self.assertIn('msg', response.get_json())  # Flask-JWT-Extended returns 'msg' for missing/invalid token
         self.assertEqual(response.get_json()['msg'], 'Missing Authorization Header')
 
+# testing add user route 
+class TestAddUser(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object(TestingConfig)
+        self.client = self.app.test_client()
+
+        # Set up the database
+        with self.app.app_context():
+            db.create_all()
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_valid_post_add_user(self):
+        """Test valid POST request for adding a new user"""
+        response = self.client.post('/add_user', json={
+            'Name': 'testuser',
+            'Email_address': 'testuser@example.com'
+        })
+        print("Test valid add user:", response.get_json())  # Print the response message
+        self.assertEqual(response.status_code, 201)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'User added successfully')
+
+    def test_duplicate_user_post(self):
+        """Test adding a user with an existing email"""
+        # First, add a user with a unique username and email
+        self.client.post('/add_user', json={
+            'Name': 'uniqueuser',  # Use a different name
+            'Email_address': 'testuser@example.com'
+        })
+
+        # Try adding another user with the same email but a different username
+        response = self.client.post('/add_user', json={
+            'Name': 'anotheruser',  # Use a different name
+            'Email_address': 'testuser@example.com'  # Same email
+        })
+    
+        print("Test duplicate user response:", response.get_json())  # Print the response message
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'This email is already in use, please use a different email')
+
+
+
+    def test_invalid_email_format(self):
+        """Test adding a user with an invalid email format"""
+        response = self.client.post('/add_user', json={
+            'Name': 'testuser',
+            'Email_address': 'invalid-email'
+        })
+        print("Test invalid email format:", response.get_json())  # Print the response message
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'Invalid email format')
+
+    def test_missing_name(self):
+        """Test adding a user without a name"""
+        response = self.client.post('/add_user', json={
+            'Name': '',
+            'Email_address': 'testuser@example.com'
+        })
+        print("Test missing name:", response.get_json())  # Print the response message
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'Missing required fields')
+
 if __name__ == '__main__':
     unittest.main()
