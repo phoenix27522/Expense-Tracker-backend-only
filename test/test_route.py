@@ -467,6 +467,94 @@ class TestModifyExpense(unittest.TestCase):
             self.assertIn('message', response.get_json())
             self.assertEqual(response.get_json()['message'], 'Expense deleted successfully')
 
+class TestFilterExpenses(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object(TestingConfig)
+        self.client = self.app.test_client()
+
+        # Set up the database
+        with self.app.app_context():
+            db.create_all()
+
+            # Create a test category to avoid ForeignKey errors
+            self.test_category = Category(name='Food')
+            db.session.add(self.test_category)
+            db.session.commit()
+
+            # Create a test user and add some expenses
+            self.test_user = User(user_name='testuser', email='testuser@example.com')
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            self.test_user.password_hash = password_hash  # Set the hashed password
+            db.session.add(self.test_user)
+            db.session.commit()
+
+            # Add some test expenses
+            self.expense1 = Expenses(
+                amount=100,
+                description='Test Expense 1',
+                date=datetime(2024, 10, 1),
+                user_id=self.test_user.id,
+                category_id=self.test_category.id
+            )
+            self.expense2 = Expenses(
+                amount=150,
+                description='Test Expense 2',
+                date=datetime(2024, 10, 5),
+                user_id=self.test_user.id,
+                category_id=self.test_category.id
+            )
+            db.session.add(self.expense1)
+            db.session.add(self.expense2)
+            db.session.commit()
+
+            # Log in the user to get JWT
+            login_response = self.client.post('/login', json={
+                'email': 'testuser@example.com',
+                'password': 'validPassword123'  # Ensure this password matches what's set in your user model
+            })
+            self.access_token = login_response.get_json()['access_token']
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_filter_expenses_by_amount(self):
+        response = self.client.get('/filter_expenses', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        }, query_string={
+            'min_amount': 100,
+            'max_amount': 150
+        })
+
+        self.assertEqual(response.status_code, 200)
+        expenses = response.get_json()
+        self.assertEqual(len(expenses), 2)  # Expect both expenses to match
+
+    def test_filter_expenses_by_date(self):
+        response = self.client.get('/filter_expenses', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        }, query_string={
+            'start_date': '2024-10-01',
+            'end_date': '2024-10-05'
+        })
+
+        self.assertEqual(response.status_code, 200)
+        expenses = response.get_json()
+        self.assertEqual(len(expenses), 2)  # Expect both expenses in this date range
+
+    def test_filter_expenses_empty(self):
+        response = self.client.get('/filter_expenses', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        }, query_string={
+            'min_amount': 200  # No expense should match
+        })
+
+        self.assertEqual(response.status_code, 200)
+        expenses = response.get_json()
+        self.assertEqual(len(expenses), 0)  # Expect no expenses
 
 if __name__ == '__main__':
     unittest.main()
+

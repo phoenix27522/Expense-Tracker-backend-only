@@ -237,3 +237,54 @@ def modifying_expenses():
         return jsonify({'message': 'Expense updated successfully'}), 200
     except Exception as e:
         return jsonify({'message': str(e)}), 400
+
+#filtering expenses
+@main.route('/filter_expenses', methods=['GET'])
+@jwt_required()
+def filter_expenses():
+    user_id = get_jwt_identity()  # Assuming JWT contains the user ID
+
+    # Retrieve query parameters
+    min_amount = request.args.get('min_amount', type=float)
+    max_amount = request.args.get('max_amount', type=float)
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    sort_by = request.args.get('sort_by', 'date')  # Default sort field
+    order = request.args.get('order', 'asc')
+
+    # Build the query
+    query = Expenses.query.filter_by(user_id=user_id)  # Filter by user_id
+
+    if min_amount is not None:
+        query = query.filter(Expenses.amount >= min_amount)
+
+    if max_amount is not None:
+        query = query.filter(Expenses.amount <= max_amount)
+
+    if start_date:
+        query = query.filter(Expenses.date >= start_date)
+
+    if end_date:
+        query = query.filter(Expenses.date <= end_date)
+
+    if order == 'asc':
+        query = query.order_by(getattr(Expenses, sort_by).asc())
+    else:
+        query = query.order_by(getattr(Expenses, sort_by).desc())
+
+    expenses = query.all()
+
+    # Serialize the data
+    result = []
+    for expense in expenses:
+        expense_data = {
+            'id': expense.id,  # Using the primary key
+            'amount': expense.amount,
+            'description': expense.description,  # Match the model
+            'date': expense.date.strftime('%Y-%m-%d'),  # Correctly formatting date
+            'user_id': expense.user_id,  # Use user_id from the model
+            'category_id': expense.category_id  # Use category_id from the model
+        }
+        result.append(expense_data)
+
+    return jsonify(result), 200
