@@ -237,3 +237,4 @@ def modifying_expenses():
         return jsonify({'message': 'Expense updated successfully'}), 200
     except Exception as e:
         return jsonify({'message': str(e)}), 400
+

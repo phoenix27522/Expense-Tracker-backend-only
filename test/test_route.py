@@ -392,3 +392,84 @@ class TestExpensesAPI(unittest.TestCase):
         self.assertIn('message', response.get_json())
         self.assertEqual(response.get_json()['message'], 'No expenses found for user testuser2')
 
+class TestModifyExpense(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object(TestingConfig)
+        self.client = self.app.test_client()
+
+        # Set up the database
+        with self.app.app_context():
+            db.create_all()
+
+            # Create test user and category
+            self.test_user = User(user_name='testuser', email='testuser@example.com')
+            self.test_category = Category(name='Food')
+
+            db.session.add(self.test_user)
+            db.session.add(self.test_category)
+            db.session.commit()
+
+            # Add a test expense
+            self.test_expense = Expenses(
+                amount=50,
+                description='Initial Expense',
+                date=datetime.now(),
+                user_id=self.test_user.id,
+                category_id=self.test_category.id
+            )
+            db.session.add(self.test_expense)
+            db.session.commit()
+
+            # Re-query the test_expense to ensure it remains attached to the session
+            self.test_expense = db.session.query(Expenses).filter_by(id=self.test_expense.id).first()
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_modify_expense(self):
+        """Test modifying an existing expense"""
+        with self.app.app_context():
+            response = self.client.post('/mod_expense', json={
+                'user': 'testuser',
+                'id': self.test_expense.id,
+                'Type': 'Updated Type',
+                'Description': 'Updated Description',
+                'Date': '2024-10-08T00:00:00',
+                'Amount': 100,
+                'Recurrence': None,
+                'RecurrenceEndDate': None
+            })
+
+            print("Test modify expense response:", response.get_json())  # For debugging
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('message', response.get_json())
+            self.assertEqual(response.get_json()['message'], 'Expense updated successfully')
+
+            # Verify the expense has been updated in the database
+            modified_expense = db.session.query(Expenses).filter_by(id=self.test_expense.id).first()
+            self.assertEqual(modified_expense.amount, 100)
+            self.assertEqual(modified_expense.description, 'Updated Description')
+
+    def test_delete_expense(self):
+        """Test deleting an existing expense"""
+        with self.app.app_context():
+            response = self.client.post('/mod_expense', json={
+                'user': 'testuser',
+                'id': self.test_expense.id,
+                'Delete': True
+            })
+
+            print("Test delete expense response:", response.get_json())  # For debugging
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('message', response.get_json())
+            self.assertEqual(response.get_json()['message'], 'Expense deleted successfully')
+
+            # Verify the expense has been deleted from the database
+            deleted_expense = db.session.query(Expenses).filter_by(id=self.test_expense.id).first()
+            self.assertIsNone(deleted_expense)
+
+if __name__ == '__main__':
+    unittest.main()
