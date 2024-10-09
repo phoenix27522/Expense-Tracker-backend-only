@@ -215,26 +215,25 @@ def modifying_expenses():
     if name_user is None or expense_id is None:
         return jsonify({'message': 'User or expense ID not specified'}), 400
 
+    # Fetch the expense by ID
     query = db.session.query(Expenses).filter(Expenses.id == expense_id).first()
     if not query:
         return jsonify({'message': 'Expense not found'}), 404
 
     if 'Delete' in data:
+        # Handle deletion of the expense
         db.session.delete(query)
         db.session.commit()
         return jsonify({'message': 'Expense deleted successfully'}), 200
 
-    # Updating expense details
+    # Updating expense details based on the existing fields
     try:
-        query.type_expense = data.get('Type', query.type_expense)
-        query.description_expense = data.get('Description', query.description_expense)
-        query.date_purchase = datetime.strptime(data.get('Date'), "%Y-%m-%dT%H:%M:%S") if data.get('Date') else query.date_purchase
-        query.amount = data.get('Amount', query.amount)
-        query.recurrence = data.get('Recurrence', query.recurrence)
-        query.recurrence_end_date = datetime.strptime(data.get('RecurrenceEndDate'), "%Y-%m-%d") if data.get('RecurrenceEndDate') else query.recurrence_end_date
-        
+        query.description = data.get('Description', query.description)  # Update description
+        query.date = datetime.strptime(data.get('Date'), "%Y-%m-%dT%H:%M:%S") if data.get('Date') else query.date
+        query.amount = data.get('Amount', query.amount)  # Update amount
+        query.category_id = data.get('Category', query.category_id)  # Update category if provided
+
         db.session.commit()
         return jsonify({'message': 'Expense updated successfully'}), 200
     except Exception as e:
         return jsonify({'message': str(e)}), 400
-
