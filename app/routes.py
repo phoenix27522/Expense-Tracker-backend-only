@@ -247,13 +247,17 @@ def filter_expenses():
     # Retrieve query parameters
     min_amount = request.args.get('min_amount', type=float)
     max_amount = request.args.get('max_amount', type=float)
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
     sort_by = request.args.get('sort_by', 'date')  # Default sort field
     order = request.args.get('order', 'asc')
 
+    # Convert date strings to datetime objects
+    start_date = datetime.strptime(start_date_str, '%Y-%m-%d') if start_date_str else None
+    end_date = datetime.strptime(end_date_str, '%Y-%m-%d') if end_date_str else None
+
     # Build the query
-    query = Expenses.query.filter_by(user_id=user_id)  # Filter by user_id
+    query = Expenses.query.filter_by(user_id=user_id)
 
     if min_amount is not None:
         query = query.filter(Expenses.amount >= min_amount)

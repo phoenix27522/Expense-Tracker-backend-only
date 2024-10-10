@@ -521,6 +521,7 @@ class TestFilterExpenses(unittest.TestCase):
             db.drop_all()
 
     def test_filter_expenses_by_amount(self):
+        print("\nTesting filter by amount...")
         response = self.client.get('/filter_expenses', headers={
             'Authorization': f'Bearer {self.access_token}'
         }, query_string={
@@ -528,11 +529,15 @@ class TestFilterExpenses(unittest.TestCase):
             'max_amount': 150
         })
 
+        print("Response Status Code:", response.status_code)
+        print("Response Data:", response.get_json())  # Debugging print
         self.assertEqual(response.status_code, 200)
         expenses = response.get_json()
+        print("Filtered Expenses by Amount:", expenses)  # Debugging print
         self.assertEqual(len(expenses), 2)  # Expect both expenses to match
 
     def test_filter_expenses_by_date(self):
+        print("\nTesting filter by date...")
         response = self.client.get('/filter_expenses', headers={
             'Authorization': f'Bearer {self.access_token}'
         }, query_string={
@@ -540,19 +545,26 @@ class TestFilterExpenses(unittest.TestCase):
             'end_date': '2024-10-05'
         })
 
+        print("Response Status Code:", response.status_code)
+        print("Response Data:", response.get_json())  # Debugging print
         self.assertEqual(response.status_code, 200)
         expenses = response.get_json()
+        print("Filtered Expenses by Date:", expenses)  # Debugging line
         self.assertEqual(len(expenses), 2)  # Expect both expenses in this date range
 
     def test_filter_expenses_empty(self):
+        print("\nTesting filter with no matching expenses...")
         response = self.client.get('/filter_expenses', headers={
             'Authorization': f'Bearer {self.access_token}'
         }, query_string={
             'min_amount': 200  # No expense should match
         })
 
+        print("Response Status Code:", response.status_code)
+        print("Response Data:", response.get_json())  # Debugging print
         self.assertEqual(response.status_code, 200)
         expenses = response.get_json()
+        print("Filtered Expenses for No Match:", expenses)  # Debugging print
         self.assertEqual(len(expenses), 0)  # Expect no expenses
 
 if __name__ == '__main__':
