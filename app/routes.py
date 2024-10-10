@@ -11,6 +11,12 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt, create_a
 from app.utils import verify_user_credentials
 from app import blacklist, db, jwt
 import re
+import logging
+
+# Configure logging to log to a file
+logging.basicConfig(filename='app.log', 
+                    level=logging.ERROR, 
+                    format='%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]')
 
 main = Blueprint('main', __name__)
 
@@ -238,7 +244,7 @@ def modifying_expenses():
     except Exception as e:
         return jsonify({'message': str(e)}), 400
 
-#filtering expenses
+# Filtering expenses
 @main.route('/filter_expenses', methods=['GET'])
 @jwt_required()
 def filter_expenses():
@@ -292,3 +298,31 @@ def filter_expenses():
         result.append(expense_data)
 
     return jsonify(result), 200
+
+# Viewing profile
+@main.route('/profile', methods=['GET'])
+@jwt_required()
+def view_profile():
+    try:
+        # Get the current user's ID from the JWT token
+        user_id = get_jwt_identity()
+
+        # Retrieve the user from the database
+        user = User.query.get(user_id)
+
+        # Check if the user exists
+        if not user:
+            logging.error(f"User with ID {user_id} not found")
+            return jsonify({'error': 'User not found'}), 404
+
+        # Return the user profile details
+        return jsonify({
+            'user_name': user.user_name,
+            'email': user.email,
+            'created_at': user.created_at.isoformat()
+        }), 200
+
+    except Exception as e:
+        # Log the error for debugging with the exception details
+        logging.error(f"Error in view_profile: {e}", exc_info=True)
+        return jsonify({'error': 'An unexpected error occurred'}), 500

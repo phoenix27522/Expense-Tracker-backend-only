@@ -567,6 +567,59 @@ class TestFilterExpenses(unittest.TestCase):
         print("Filtered Expenses for No Match:", expenses)  # Debugging print
         self.assertEqual(len(expenses), 0)  # Expect no expenses
 
+# testing for viewing profile
+class TestUserProfile(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object(TestingConfig)
+        self.client = self.app.test_client()
+
+        # Set up the database
+        with self.app.app_context():
+            db.create_all()
+
+            # Create a test user
+            self.test_user = User(user_name='testuser', email='testuser@example.com')
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            self.test_user.password_hash = password_hash
+            db.session.add(self.test_user)
+            db.session.commit()
+
+            # Log in the user to get JWT
+            login_response = self.client.post('/login', json={
+                'email': 'testuser@example.com',
+                'password': 'validPassword123'
+            })
+            self.access_token = login_response.get_json()['access_token']
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_view_profile(self):
+        # Access the profile route
+        response = self.client.get('/profile', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        })
+
+        print("Profile Response:", response.get_json())  # Debugging print
+        self.assertEqual(response.status_code, 200)
+        profile_data = response.get_json()
+        self.assertEqual(profile_data['user_name'], 'testuser')
+        self.assertEqual(profile_data['email'], 'testuser@example.com')
+        self.assertIn('created_at', profile_data)  # Ensure the created_at field is included
+
+    def test_unauthorized_access(self):
+        # Attempt to access the profile route without a JWT
+        response = self.client.get('/profile')
+
+        print("Unauthorized Access Response:", response.get_json())  # Debugging print
+        self.assertEqual(response.status_code, 401)
+        error_data = response.get_json()
+        self.assertIn('msg', error_data)  # Flask-JWT returns 'msg' field for missing tokens
+        self.assertEqual(error_data['msg'], 'Missing Authorization Header')
+
 if __name__ == '__main__':
     unittest.main()
 
