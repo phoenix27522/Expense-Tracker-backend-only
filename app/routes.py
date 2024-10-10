@@ -326,3 +326,54 @@ def view_profile():
         # Log the error for debugging with the exception details
         logging.error(f"Error in view_profile: {e}", exc_info=True)
         return jsonify({'error': 'An unexpected error occurred'}), 500
+
+# Editing profile 
+@main.route('/profile', methods=['PUT'])
+@jwt_required()
+def edit_profile():
+    try:
+        # Get the current user's ID from the JWT token
+        user_id = get_jwt_identity()
+
+        # Retrieve the user from the database
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Get the data from the request
+        data = request.get_json()
+        user_name = data.get('user_name')
+        email = data.get('email')
+
+        # Validate the input data
+        if not user_name or not email:
+            return jsonify({'error': 'Username and email are required'}), 400
+
+        # Validate the email format
+        email_regex = r'^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w+$'
+        if not re.match(email_regex, email):
+            return jsonify({'error': 'Invalid email format'}), 400
+
+        # Check if the new username or email already exists
+        existing_user = User.query.filter(
+            (User.user_name == user_name) | (User.email == email)).first()
+        if existing_user and existing_user.id != user_id:
+            return jsonify({'error': 'Username or email already in use'}), 400
+
+        # Update the user profile
+        user.user_name = user_name
+        user.email = email
+
+        # Commit the changes to the database
+        db.session.commit()
+
+        return jsonify({'message': 'Profile updated successfully'}), 200
+
+    except Exception as e:
+        # Rollback only if it's a database-related error
+        db.session.rollback()
+        
+        # Log the error for production debugging
+        logging.error(f"Error in edit_profile: {e}")
+
+        return jsonify({'error': 'An unexpected error occurred'}), 500

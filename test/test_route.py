@@ -620,6 +620,133 @@ class TestUserProfile(unittest.TestCase):
         self.assertIn('msg', error_data)  # Flask-JWT returns 'msg' field for missing tokens
         self.assertEqual(error_data['msg'], 'Missing Authorization Header')
 
+# Testing for editing profile
+class TestEditProfile(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object(TestingConfig)
+        self.client = self.app.test_client()
+
+        # Set up the database
+        with self.app.app_context():
+            db.create_all()
+
+            # Create a test user
+            self.test_user = User(user_name='testuser', email='testuser@example.com')
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            self.test_user.password_hash = password_hash
+            db.session.add(self.test_user)
+            db.session.commit()
+
+            # Log in the user to get JWT
+            login_response = self.client.post('/login', json={
+                'email': 'testuser@example.com',
+                'password': 'validPassword123'
+            })
+            self.access_token = login_response.get_json()['access_token']
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_valid_profile_update(self):
+        # Update the profile with valid data
+        response = self.client.put('/profile', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        }, json={
+            'user_name': 'updateduser',
+            'email': 'updatedemail@example.com'
+        })
+
+        print("Valid Update Response:", response.get_json())  # Debugging print
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'Profile updated successfully')
+
+        # Ensure the changes were made in the database
+        with self.app.app_context():
+            updated_user = User.query.get(self.test_user.id)
+            self.assertEqual(updated_user.user_name, 'updateduser')
+            self.assertEqual(updated_user.email, 'updatedemail@example.com')
+
+    def test_profile_update_with_invalid_email(self):
+        # Try to update the profile with an invalid email
+        response = self.client.put('/profile', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        }, json={
+            'user_name': 'updateduser',
+            'email': 'invalidemail'  # Invalid email format
+        })
+
+        print("Invalid Email Response:", response.get_json())  # Debugging print
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.get_json())
+        self.assertEqual(response.get_json()['error'], 'Invalid email format')
+
+    def test_profile_update_with_existing_username_or_email(self):
+        # Create another user to test duplicate username/email
+        with self.app.app_context():
+            another_user = User(user_name='existinguser', email='existing@example.com')
+            db.session.add(another_user)
+            db.session.commit()
+
+        # Try to update the profile with an existing username
+        response = self.client.put('/profile', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        }, json={
+            'user_name': 'existinguser',  # Existing username
+            'email': 'updatedemail@example.com'
+        })
+
+        print("Existing Username Response:", response.get_json())  # Debugging print
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.get_json())
+        self.assertEqual(response.get_json()['error'], 'Username or email already in use')
+
+        # Try to update the profile with an existing email
+        response = self.client.put('/profile', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        }, json={
+            'user_name': 'updateduser',
+            'email': 'existing@example.com'  # Existing email
+        })
+
+        print("Existing Email Response:", response.get_json())  # Debugging print
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.get_json())
+        self.assertEqual(response.get_json()['error'], 'Username or email already in use')
+
+    def test_profile_update_with_missing_fields(self):
+        # Try to update the profile without a username
+        response = self.client.put('/profile', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        }, json={
+            'email': 'updatedemail@example.com'
+        })
+
+        print("Missing Username Response:", response.get_json())  # Debugging print
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.get_json())
+        self.assertEqual(response.get_json()['error'], 'Username and email are required')
+
+        # Try to update the profile without an email
+        response = self.client.put('/profile', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        }, json={
+            'user_name': 'updateduser'
+        })
+
+        print("Missing Email Response:", response.get_json())  # Debugging print
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.get_json())
+        self.assertEqual(response.get_json()['error'], 'Username and email are required')
+
 if __name__ == '__main__':
     unittest.main()
-
