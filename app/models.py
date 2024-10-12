@@ -42,6 +42,7 @@ class User(db.Model):
     # Relationships
     expenses = relationship('Expenses', back_populates='user')
     recurring_expenses = relationship('RecurringExpense', back_populates='user')
+    notifications = relationship('Notification', back_populates='user')
 
     def set_password(self, password):
         validate_password(password)
@@ -134,6 +135,8 @@ class Notification(db.Model):
     type = Column(String(50), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read = Column(Boolean, default=False)
+
+    user = relationship("User", back_populates="notifications")  # Assuming User has a notifications relationship
 
     def __repr__(self):
         return f'<Notification {self.message}>'

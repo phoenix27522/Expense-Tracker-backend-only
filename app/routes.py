@@ -377,3 +377,71 @@ def edit_profile():
         logging.error(f"Error in edit_profile: {e}")
 
         return jsonify({'error': 'An unexpected error occurred'}), 500
+
+# getting notification 
+@main.route('/notifications', methods=['GET'])
+@jwt_required()
+def get_notifications():
+    try:
+        # Get the current user's ID from the JWT token
+        user_id = get_jwt_identity()
+        if not user_id:
+            logging.warning('JWT token did not provide a valid user ID.')
+            return jsonify({'error': 'Invalid token'}), 401
+
+        # Query for the user's notifications
+        notifications = Notification.query.filter_by(user_id=user_id).order_by(Notification.created_at.desc()).all()
+
+        # Log if no notifications found
+        if not notifications:
+            logging.info(f'No notifications found for user ID {user_id}')
+
+        # Prepare the response
+        return jsonify([
+            {
+                'id': notification.id,
+                'message': notification.message,
+                'type': notification.type,
+                'created_at': notification.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'is_read': notification.is_read
+            } for notification in notifications
+        ]), 200
+
+    except Exception as e:
+        # Log the exception for debugging
+        logging.error(f"Error fetching notifications for user ID {user_id}: {e}", exc_info=True)
+        return jsonify({'error': 'An unexpected error occurred'}), 500
+
+# mark read for notification 
+# mark read for notification 
+@main.route('/notifications/<int:id>/read', methods=['PATCH'])
+@jwt_required()
+def mark_notification_as_read(id):
+    try:
+        # Get the current user's ID from the JWT
+        user_id = get_jwt_identity()
+
+        # Query the notification by ID and user_id to ensure the user owns the notification
+        notification = Notification.query.filter_by(id=id, user_id=user_id).first()
+
+        if not notification:
+            return jsonify({'error': 'Notification not found'}), 404
+
+        # Check if the notification is already marked as read
+        if notification.is_read:
+            return jsonify({'message': 'Notification is already marked as read'}), 200
+
+        # Mark the notification as read
+        notification.is_read = True
+        db.session.commit()  # Ensure the session is active when committing changes
+
+        return jsonify({'message': 'Notification marked as read'}), 200
+
+    except Exception as e:
+        # Rollback in case of an exception during the database commit
+        db.session.rollback()
+
+        # Log the error for further investigation
+        logging.error(f"Error marking notification as read: {e}", exc_info=True)
+
+        return jsonify({'error': 'An unexpected error occurred'}), 500

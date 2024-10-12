@@ -1,8 +1,10 @@
 from datetime import datetime
 import unittest
+
+from flask_jwt_extended import create_access_token
 from app.config import TestingConfig
 from app import create_app, db
-from app.models import Category, User, Expenses
+from app.models import Category, Notification, User, Expenses
 import bcrypt  # Import bcrypt for password hashing
 
 # test case for user registration
@@ -747,6 +749,224 @@ class TestEditProfile(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('error', response.get_json())
         self.assertEqual(response.get_json()['error'], 'Username and email are required')
+        
+# Testing for getting notification  
+class TestNotifications(unittest.TestCase):
+    def setUp(self):
+        # Create the Flask app and configure the test client
+        self.app = create_app()
+        self.app.config.from_object('app.config.TestingConfig')
+        self.client = self.app.test_client()
+
+        # Set up the database and create a test user and notifications
+        with self.app.app_context():
+            db.create_all()
+
+            # Create a test user with a valid password
+            self.test_user = User(user_name='testuser', email='testuser@example.com')
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            self.test_user.password_hash = password_hash
+            db.session.add(self.test_user)
+            db.session.commit()
+
+            # Create some test notifications for the user
+            self.notification1 = Notification(
+                user_id=self.test_user.id,
+                message='Notification 1',
+                type='Info',
+                created_at=datetime(2024, 10, 10, 9, 30, 0),
+                is_read=False
+            )
+            self.notification2 = Notification(
+                user_id=self.test_user.id,
+                message='Notification 2',
+                type='Warning',
+                created_at=datetime(2024, 10, 10, 10, 30, 0),
+                is_read=True
+            )
+            db.session.add(self.notification1)
+            db.session.add(self.notification2)
+            db.session.commit()
+
+            # Log in the user to get a JWT
+            self.access_token = create_access_token(identity=self.test_user.id)
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_get_notifications(self):
+        """Test retrieving all notifications for the user."""
+        response = self.client.get('/notifications', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        })
+
+        self.assertEqual(response.status_code, 200)
+        notifications = response.get_json()
+
+        self.assertEqual(len(notifications), 2)  # Expecting two notifications
+        self.assertEqual(notifications[0]['message'], 'Notification 2')  # Ordered by created_at desc
+        self.assertEqual(notifications[1]['message'], 'Notification 1')
+
+    def test_empty_notifications(self):
+        """Test when the user has no notifications."""
+        # Create a new user with no notifications
+        with self.app.app_context():
+            new_user = User(user_name='newuser', email='newuser@example.com')
+            password_hash = bcrypt.hashpw('newPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            new_user.password_hash = password_hash
+            db.session.add(new_user)
+            db.session.commit()
+
+            # Log in with the new user to get a JWT
+            new_access_token = create_access_token(identity=new_user.id)
+
+        response = self.client.get('/notifications', headers={
+            'Authorization': f'Bearer {new_access_token}'
+        })
+
+        self.assertEqual(response.status_code, 200)
+        notifications = response.get_json()
+        self.assertEqual(len(notifications), 0)  # No notifications for the new user
+
+    def test_get_notifications_with_no_auth(self):
+        """Test accessing the notifications route without a valid JWT."""
+        response = self.client.get('/notifications')
+        self.assertEqual(response.status_code, 401)
+        self.assertIn('msg', response.get_json())  # Flask-JWT returns 'msg' for missing tokens
+        self.assertEqual(response.get_json()['msg'], 'Missing Authorization Header')
+
+    def test_unread_notifications(self):
+        """Test checking if unread notifications are marked correctly."""
+        response = self.client.get('/notifications', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        })
+
+        self.assertEqual(response.status_code, 200)
+        notifications = response.get_json()
+
+        unread_notification = notifications[1]  # Notification 1 should be unread
+        self.assertFalse(unread_notification['is_read'])
+        
+        read_notification = notifications[0]  # Notification 2 should be read
+        self.assertTrue(read_notification['is_read'])
+
+    def test_notification_format(self):
+        """Test the format of the notifications returned."""
+        response = self.client.get('/notifications', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        })
+
+        self.assertEqual(response.status_code, 200)
+        notifications = response.get_json()
+
+        for notification in notifications:
+            self.assertIn('id', notification)
+            self.assertIn('message', notification)
+            self.assertIn('type', notification)
+            self.assertIn('created_at', notification)
+            self.assertIn('is_read', notification) 
+            
+class TestMarkNotificationAsRead(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object('app.config.TestingConfig')
+        self.client = self.app.test_client()
+
+        # Set up the database
+        with self.app.app_context():
+            db.create_all()
+
+            # Create a test user
+            self.test_user = User(user_name='testuser', email='testuser@example.com')
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            self.test_user.password_hash = password_hash
+            db.session.add(self.test_user)
+            db.session.commit()
+
+            # Create test notifications for this user
+            self.notification1 = Notification(
+                user_id=self.test_user.id,
+                message='Test notification 1',
+                type='info',
+                is_read=False
+            )
+            self.notification2 = Notification(
+                user_id=self.test_user.id,
+                message='Test notification 2',
+                type='warning',
+                is_read=False
+            )
+            db.session.add(self.notification1)
+            db.session.add(self.notification2)
+            db.session.commit()
+
+            # Log in the user to get JWT
+            login_response = self.client.post('/login', json={
+                'email': 'testuser@example.com',
+                'password': 'validPassword123'
+            })
+            self.access_token = login_response.get_json()['access_token']
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_mark_notification_as_read(self):
+        """Test marking a notification as read by the correct user."""
+        with self.app.app_context():
+            notification1 = Notification.query.get(self.notification1.id)  # Fetch notification
+
+        response = self.client.patch(f'/notifications/{notification1.id}/read', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('message', response.get_json())
+        self.assertEqual(response.get_json()['message'], 'Notification marked as read')
+
+        # Verify that the notification is marked as read in the database
+        with self.app.app_context():
+            updated_notification = Notification.query.get(notification1.id)
+            self.assertTrue(updated_notification.is_read)
+
+    def test_mark_notification_as_read_without_auth(self):
+        """Test trying to mark a notification as read without authentication."""
+        with self.app.app_context():
+            notification1 = Notification.query.get(self.notification1.id)  # Re-fetch notification
+        
+        response = self.client.patch(f'/notifications/{notification1.id}/read')
+        self.assertEqual(response.status_code, 401)  # Should return unauthorized error
+
+    def test_mark_other_users_notification_as_read(self):
+        """Test marking another user's notification as read."""
+        # Create another user and notification
+        with self.app.app_context():
+            another_user = User(user_name='otheruser', email='otheruser@example.com')
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            another_user.password_hash = password_hash
+            db.session.add(another_user)
+            db.session.commit()
+
+            # Create a notification for the other user
+            notification_for_other_user = Notification(
+                user_id=another_user.id,
+                message='Test notification for another user',
+                type='info',
+                is_read=False
+            )
+            db.session.add(notification_for_other_user)
+            db.session.commit()
+
+        with self.app.app_context():
+            response = self.client.patch(f'/notifications/{notification_for_other_user.id}/read', headers={
+                'Authorization': f'Bearer {self.access_token}'
+            })
+
+            self.assertEqual(response.status_code, 404)  # Should return not found error for unauthorized access
+
 
 if __name__ == '__main__':
     unittest.main()
