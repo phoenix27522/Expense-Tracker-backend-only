@@ -468,20 +468,18 @@ def delete_notification(id):
 def export_expenses_csv():
     try:
         user_id = get_jwt_identity()
-        expenses = Expenses.query.filter_by(user_name=user_id).all()
+        expenses = Expenses.query.filter_by(user_id=user_id).all()
 
         si = StringIO()
         csv_writer = csv.writer(si)
-        csv_writer.writerow(['Type', 'Description', 'Date', 'Amount', 'Recurrence', 'RecurrenceEndDate'])
+        csv_writer.writerow(['Description', 'Date', 'Amount', 'Category'])
 
         for expense in expenses:
             csv_writer.writerow([
-                expense.type_expense,
-                expense.description_expense,
-                expense.date_purchase.strftime('%Y-%m-%d'),
+                expense.description,
+                expense.date.strftime('%Y-%m-%d'),
                 expense.amount,
-                expense.recurrence,
-                expense.recurrence_end_date.strftime('%Y-%m-%d') if expense.recurrence_end_date else None
+                expense.category.name  # Assuming Category has a name field
             ])
 
         output = make_response(si.getvalue())
@@ -493,13 +491,12 @@ def export_expenses_csv():
         print(f"Error in export_expenses_csv: {e}")
         return jsonify({'error': 'An unexpected error occurred'}), 500
 
-
 @main.route('/export/pdf', methods=['GET'])
 @jwt_required()
 def export_expenses_pdf():
     try:
         user_id = get_jwt_identity()
-        expenses = Expenses.query.filter_by(user_name=user_id).all()
+        expenses = Expenses.query.filter_by(user_id=user_id).all()
 
         pdf = FPDF()
         pdf.add_page()
@@ -507,23 +504,22 @@ def export_expenses_pdf():
 
         pdf.cell(200, 10, txt="Expense Report", ln=True, align='C')
 
-        pdf.cell(50, 10, txt="Type", border=1)
+        # Define column headers
         pdf.cell(70, 10, txt="Description", border=1)
         pdf.cell(30, 10, txt="Date", border=1)
         pdf.cell(30, 10, txt="Amount", border=1)
-        pdf.cell(30, 10, txt="Recurrence", border=1)
-        pdf.cell(30, 10, txt="End Date", border=1)
+        pdf.cell(70, 10, txt="Category", border=1)
         pdf.ln()
 
+        # Iterate over expenses and add them to the PDF
         for expense in expenses:
-            pdf.cell(50, 10, txt=expense.type_expense, border=1)
-            pdf.cell(70, 10, txt=expense.description_expense, border=1)
-            pdf.cell(30, 10, txt=expense.date_purchase.strftime('%Y-%m-%d'), border=1)
+            pdf.cell(70, 10, txt=expense.description, border=1)
+            pdf.cell(30, 10, txt=expense.date.strftime('%Y-%m-%d'), border=1)
             pdf.cell(30, 10, txt=f"{expense.amount:.2f}", border=1)
-            pdf.cell(30, 10, txt=expense.recurrence if expense.recurrence else "", border=1)
-            pdf.cell(30, 10, txt=expense.recurrence_end_date.strftime('%Y-%m-%d') if expense.recurrence_end_date else "", border=1)
+            pdf.cell(70, 10, txt=expense.category.name if expense.category else "", border=1)  # Assuming category relationship
             pdf.ln()
 
+        # Create a response object for PDF
         output = make_response(pdf.output(dest='S').encode('latin1'))
         output.headers["Content-Disposition"] = "attachment; filename=expenses.pdf"
         output.headers["Content-type"] = "application/pdf"

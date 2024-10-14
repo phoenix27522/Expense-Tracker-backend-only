@@ -1,6 +1,6 @@
 from datetime import datetime
+import time
 import unittest
-
 from flask_jwt_extended import create_access_token
 from app.config import TestingConfig
 from app import create_app, db
@@ -1056,6 +1056,136 @@ class TestDeleteNotification(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn('error', response.get_json())
         self.assertEqual(response.get_json()['error'], 'Notification not found')
+
+class TestExportExpensesCSV(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object('app.config.TestingConfig')
+        self.client = self.app.test_client()
+
+        with self.app.app_context():
+            db.create_all()
+
+            # Create a test user with a unique email using current timestamp
+            self.test_user = User(user_name=f'testuser_{int(time.time())}', email=f'testuser_{int(time.time())}@example.com')
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            self.test_user.password_hash = password_hash
+            db.session.add(self.test_user)
+            db.session.commit()
+
+            # Create a category
+            self.category = Category(name='Groceries')
+            db.session.add(self.category)
+            db.session.commit()
+
+            # Create test expenses
+            self.expense1 = Expenses(
+                user_id=self.test_user.id,
+                description='Groceries',
+                date=datetime(2024, 10, 15),
+                amount=50.25,
+                category_id=self.category.id
+            )
+            self.expense2 = Expenses(
+                user_id=self.test_user.id,
+                description='Subscription',
+                date=datetime(2024, 10, 1),
+                amount=10.00,
+                category_id=self.category.id
+            )
+            db.session.add(self.expense1)
+            db.session.add(self.expense2)
+            db.session.commit()
+
+            # Create JWT token for the user
+            self.access_token = create_access_token(identity=self.test_user.id)
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_export_expenses_csv(self):
+        """Test exporting expenses as a CSV."""
+        response = self.client.get('/export/csv', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-Type"], "text/csv")
+        self.assertIn('Content-Disposition', response.headers)
+
+        csv_data = response.get_data(as_text=True)
+        self.assertIn('Description,Date,Amount,Category', csv_data)
+        self.assertIn('Groceries', csv_data)
+        self.assertIn('Subscription', csv_data)
+
+class TestExportExpensesPDF(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app()
+        self.app.config.from_object('app.config.TestingConfig')
+        self.client = self.app.test_client()
+
+        with self.app.app_context():
+            db.create_all()
+
+            # Create a test user
+            self.test_user = User(user_name='testuser', email='testuser@example.com')
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            self.test_user.password_hash = password_hash
+            db.session.add(self.test_user)
+            db.session.commit()
+
+            # Create a category
+            self.category = Category(name='Groceries')
+            db.session.add(self.category)
+            db.session.commit()
+
+            # Create test expenses
+            self.expense1 = Expenses(
+                user_id=self.test_user.id,
+                description='Groceries',
+                date=datetime(2024, 10, 15),
+                amount=50.25,
+                category_id=self.category.id
+            )
+            self.expense2 = Expenses(
+                user_id=self.test_user.id,
+                description='Subscription',
+                date=datetime(2024, 10, 1),
+                amount=10.00,
+                category_id=self.category.id
+            )
+            db.session.add(self.expense1)
+            db.session.add(self.expense2)
+            db.session.commit()
+
+            # Create JWT token for the user
+            self.access_token = create_access_token(identity=self.test_user.id)
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_export_expenses_pdf(self):
+        """Test exporting expenses as a PDF."""
+        response = self.client.get('/export/pdf', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        })
+
+        # Check response status and content type
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-type"], "application/pdf")
+        self.assertIn('Content-Disposition', response.headers)
+
+        # Check if response data is in PDF format
+        self.assertTrue(response.data.startswith(b'%PDF-'))  # PDF files start with '%PDF-'
+
+        # Optionally, check if it contains specific strings in binary
+        # Since it's a PDF, this is not recommended, but for basic validation:
+        # self.assertIn(b'Groceries', response.data)  # This may not work since it's binary
+        # self.assertIn(b'Subscription', response.data)
 
 
 if __name__ == '__main__':
