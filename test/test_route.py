@@ -917,7 +917,8 @@ class TestMarkNotificationAsRead(unittest.TestCase):
     def test_mark_notification_as_read(self):
         """Test marking a notification as read by the correct user."""
         with self.app.app_context():
-            notification1 = Notification.query.get(self.notification1.id)  # Fetch notification
+            # Re-fetch notification from the database to avoid detached instance
+            notification1 = Notification.query.filter_by(message='Test notification 1').first()
 
         response = self.client.patch(f'/notifications/{notification1.id}/read', headers={
             'Authorization': f'Bearer {self.access_token}'
@@ -935,7 +936,8 @@ class TestMarkNotificationAsRead(unittest.TestCase):
     def test_mark_notification_as_read_without_auth(self):
         """Test trying to mark a notification as read without authentication."""
         with self.app.app_context():
-            notification1 = Notification.query.get(self.notification1.id)  # Re-fetch notification
+            # Re-fetch notification to avoid detached instance
+            notification1 = Notification.query.filter_by(message='Test notification 1').first()
         
         response = self.client.patch(f'/notifications/{notification1.id}/read')
         self.assertEqual(response.status_code, 401)  # Should return unauthorized error
@@ -961,11 +963,99 @@ class TestMarkNotificationAsRead(unittest.TestCase):
             db.session.commit()
 
         with self.app.app_context():
+            # Re-fetch the notification to avoid detached instance
+            notification_for_other_user = Notification.query.filter_by(message='Test notification for another user').first()
+
             response = self.client.patch(f'/notifications/{notification_for_other_user.id}/read', headers={
                 'Authorization': f'Bearer {self.access_token}'
             })
 
             self.assertEqual(response.status_code, 404)  # Should return not found error for unauthorized access
+
+class TestDeleteNotification(unittest.TestCase):
+    def setUp(self):
+        # Create the Flask app and configure the test client
+        self.app = create_app()
+        self.app.config.from_object('app.config.TestingConfig')
+        self.client = self.app.test_client()
+
+        # Set up the database and create a test user and notification
+        with self.app.app_context():
+            db.create_all()
+
+            # Create a test user
+            self.test_user = User(user_name='testuser', email='testuser@example.com')
+            password_hash = bcrypt.hashpw('validPassword123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            self.test_user.password_hash = password_hash
+            db.session.add(self.test_user)
+            db.session.commit()
+
+            # Create test notifications
+            self.notification1 = Notification(
+                user_id=self.test_user.id,
+                message='Notification 1',
+                type='Info',
+                created_at=datetime(2024, 10, 10, 9, 30, 0),
+                is_read=False
+            )
+            self.notification2 = Notification(
+                user_id=self.test_user.id,
+                message='Notification 2',
+                type='Warning',
+                created_at=datetime(2024, 10, 10, 10, 30, 0),
+                is_read=True
+            )
+            db.session.add(self.notification1)
+            db.session.add(self.notification2)
+            db.session.commit()
+
+            # Get a JWT token for the user
+            self.access_token = create_access_token(identity=self.test_user.id)
+
+    def tearDown(self):
+        # Tear down the database
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_delete_notification(self):
+        """Test deleting a notification."""
+        with self.app.app_context():
+            # Re-fetch the notification within the session
+            notification1 = Notification.query.filter_by(message='Notification 1').first()
+
+            response = self.client.delete(f'/notifications/{notification1.id}', headers={
+                'Authorization': f'Bearer {self.access_token}'
+            })
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.get_json()['message'], 'Notification deleted successfully')
+
+            # Ensure the notification is deleted
+            notification_in_db = Notification.query.get(notification1.id)
+            self.assertIsNone(notification_in_db)
+
+    def test_delete_notification_without_auth(self):
+        """Test deleting a notification without authentication."""
+        with self.app.app_context():
+            # Re-fetch the notification within the session
+            notification1 = Notification.query.filter_by(message='Notification 1').first()
+
+            response = self.client.delete(f'/notifications/{notification1.id}')
+            self.assertEqual(response.status_code, 401)
+            self.assertIn('msg', response.get_json())
+            self.assertEqual(response.get_json()['msg'], 'Missing Authorization Header')
+
+    def test_delete_non_existing_notification(self):
+        """Test deleting a notification that doesn't exist."""
+        non_existing_id = 999
+        response = self.client.delete(f'/notifications/{non_existing_id}', headers={
+            'Authorization': f'Bearer {self.access_token}'
+        })
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn('error', response.get_json())
+        self.assertEqual(response.get_json()['error'], 'Notification not found')
 
 
 if __name__ == '__main__':
