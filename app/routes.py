@@ -528,3 +528,4 @@ def export_expenses_pdf():
     except Exception as e:
         print(f"Error in export_expenses_pdf: {e}")
         return jsonify({'error': 'An unexpected error occurred'}), 500
+
