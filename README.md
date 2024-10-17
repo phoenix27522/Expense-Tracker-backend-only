@@ -1,5 +1,3 @@
-Here's a sample `README.md` to guide users on how to use your API and model documentation files:
-
 ---
 
 # Expense Tracker API
@@ -126,5 +124,3 @@ This will run the unit tests and validate the core functionalities, including us
 If you have any issues or need further clarifications, feel free to consult the documentation files or open an issue in the repository.
 
 --- 
-
-This `README.md` provides a comprehensive overview and clear instructions for users to understand and interact with your API.
