@@ -1,7 +1,3 @@
-An `Architecture.md` file is useful to provide an overview of the system’s structure, design choices, and flow of data within the project. If you think it will help users and developers understand the inner workings and design decisions of your expense tracker project, it can be beneficial.
-
-Here’s a sample `Architecture.md` for your project:
-
 ---
 
 # Architecture of Expense Tracker API
@@ -104,5 +100,3 @@ The Expense Tracker API is a backend system designed to handle user authenticati
 The modular design of the Expense Tracker API ensures that the code is maintainable and scalable. Each component is designed to handle specific functionality, promoting separation of concerns. The architecture allows for easy future enhancements such as support for additional notification types, advanced filtering, and more robust authentication mechanisms.
 
 ---
-
-This `Architecture.md` file gives a clear picture of your system’s structure, components, and data flow, which can help both developers and users understand how your project works under the hood.
