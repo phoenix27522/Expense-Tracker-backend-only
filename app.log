@@ -1,1 +1,2 @@
 2024-10-12 10:51:23,650 ERROR: Error: Directory migrations already exists and is not empty [in /home/phoenix27522/myenv/lib/python3.10/site-packages/flask_migrate/__init__.py:113]
+2024-10-17 10:45:05,198 ERROR: Error: Directory migrations already exists and is not empty [in /home/phoenix27522/myenv/lib/python3.10/site-packages/flask_migrate/__init__.py:113]
