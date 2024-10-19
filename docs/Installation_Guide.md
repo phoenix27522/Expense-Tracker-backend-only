@@ -27,7 +27,7 @@ git clone https://github.com/phoenix27522/Expense-Tracker-backend-only.git
 Navigate into the project directory:
 
 ```bash
-cd expense-tracker-api
+cd Expense-Tracker-backend-only
 ```
 
 ### 2. Set Up a Virtual Environment
