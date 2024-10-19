@@ -21,7 +21,7 @@ Before you begin, ensure you have the following installed on your system:
 Start by cloning the project repository from GitHub:
 
 ```bash
-git clone <repository_url>
+git clone https://github.com/phoenix27522/Expense-Tracker-backend-only.git
 ```
 
 Navigate into the project directory:
